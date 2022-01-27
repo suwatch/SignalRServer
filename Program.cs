@@ -3,6 +3,7 @@
 
 using System;
 using System.Diagnostics;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Crank.EventSources;
 using Microsoft.Extensions.Configuration;
@@ -24,19 +25,35 @@ namespace BenchmarkServer
                 .AddCommandLine(args)
                 .Build();
 
-            var host = new WebHostBuilder()
-                .UseConfiguration(config)
-                .ConfigureLogging(loggerFactory =>
-                {
-                    if (Enum.TryParse(config["LogLevel"], out LogLevel logLevel))
-                    {
-                        loggerFactory.AddConsole().SetMinimumLevel(logLevel);
-                    }
-                })
-                .UseKestrel()
-                .UseStartup<Startup>();
+            // AppService inprocess don't use kestrel
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME")))
+            {
+                var builder = WebApplication.CreateBuilder(args);
 
-            host.Build().Run();
+                var startup = new Startup(config);
+                startup.ConfigureServices(builder.Services);
+
+                var app = builder.Build();
+                startup.Configure(app);
+
+                app.Run();
+            }
+            else
+            {
+                var host = new WebHostBuilder()
+                    .UseConfiguration(config)
+                    .ConfigureLogging(loggerFactory =>
+                    {
+                        if (Enum.TryParse(config["LogLevel"], out LogLevel logLevel))
+                        {
+                            loggerFactory.AddConsole().SetMinimumLevel(logLevel);
+                        }
+                    })
+                    .UseKestrel()
+                    .UseStartup<Startup>();
+
+                host.Build().Run();
+            }
         }
     }
 }
